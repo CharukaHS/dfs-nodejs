@@ -1,25 +1,32 @@
 import express from "express";
-import { logger } from "../util/logger";
-import { AddNewNode } from "./registry";
+import cors from "cors";
+import { createProxyMiddleware } from "http-proxy-middleware";
 
+import { logger } from "../util/logger";
+
+import { AddNewNode, GetMasterNodePort } from "./registry";
+
+// express config
 const app = express();
 const port: number = 3000;
-
+app.use(cors({ allowedHeaders: "*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.get("/", (req, res) => {
-  logger("vibe check");
-  res.send("vibe check");
-});
-
 /*
-Registering new nodes in ledger
+  Registering new nodes in ledger
 */
 app.post("/register", async (req, res) => {
   const port = await AddNewNode(req.body);
   res.json({ port });
 });
+
+/*
+  Handle file uploads
+  http proxy for redirect uploads
+*/
+const master_upload_url = () => `http://localhost:${GetMasterNodePort()}`;
+app.use("/upload", createProxyMiddleware({ router: master_upload_url }));
 
 app.listen(port, () => {
   logger(`running on port ${port}`, "success");

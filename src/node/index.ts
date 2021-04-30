@@ -1,8 +1,12 @@
 import express from "express";
+import cors from "cors";
 import fetch from "node-fetch";
 import AbortController from "abort-controller";
+import multer from "multer";
+import { join } from "path";
 
 import { logger } from "../util/logger";
+import { SplitFile } from "./master";
 
 interface node_interface {
   node_id: number;
@@ -10,15 +14,42 @@ interface node_interface {
   node_port?: number;
 }
 
-const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
 const SERVICE_REGISTRY = "http://localhost:3000";
 const NODE_DETAILS: node_interface = {
   node_id: process.pid,
   node_role: "dfs",
 };
+
+// express config
+const app = express();
+app.use(cors({ allowedHeaders: "*" }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// multer config
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, join(__dirname + "/tmp/uploads"));
+  },
+  filename: (req, file, cb) => {
+    cb(
+      null,
+      file.fieldname +
+        "-" +
+        Date.now() +
+        "-" +
+        Math.round(Math.random() * 100000)
+    );
+  },
+});
+const upload = multer({ storage });
+
+// Endpoints - Master
+app.post("/upload", upload.single("inputfile"), (req, res) => {
+  logger(`Received a file ${req.file.originalname}`, "info");
+  SplitFile(req.file);
+  res.sendStatus(200);
+});
 
 // Mount express app on given node
 const mount_node = (port: number) => {
