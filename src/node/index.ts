@@ -7,6 +7,7 @@ import { join } from "path";
 
 import { logger } from "../util/logger";
 import { SplitFile } from "./master";
+import { CheckUploadDirExist } from "./common/fs";
 
 interface node_interface {
   node_id: number;
@@ -27,9 +28,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // multer config
+// files are temporary saved in /tmp
+// chunked saved in /tmp/$pid
+const TMP_PATH = join(__dirname + "/tmp");
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, join(__dirname + "/tmp/uploads"));
+    cb(null, TMP_PATH);
   },
   filename: (req, file, cb) => {
     cb(
@@ -61,6 +65,9 @@ const mount_node = (port: number) => {
   logger(`Mounting node in localhost:${NODE_DETAILS.node_port}`);
   app.listen(NODE_DETAILS.node_port, () => {
     logger(`Running on port ${NODE_DETAILS.node_port}`, "success");
+
+    // Make sure uploads saving directory exist, if not create one
+    CheckUploadDirExist(TMP_PATH, NODE_DETAILS.node_id.toString());
   });
 };
 
