@@ -1,5 +1,6 @@
 import { logger } from "../util/logger";
 import { CheckFileExist, RemoveOriginal } from "./common/fs";
+import { AddNewFileToDB } from "./common/nedb";
 import { RunSplitShell } from "./common/shell";
 
 export const SplitFile = async (file: Express.Multer.File) => {
@@ -14,6 +15,9 @@ export const SplitFile = async (file: Express.Multer.File) => {
     // Splitting file into chunks is done by split.sh
     logger(`${file.filename}: split job started`);
     await RunSplitShell(file, CHUNK_SIZE);
+
+    // Update master database
+    await AddNewFileToDB(file);
   } catch (error) {
     logger(error, "error");
   }
