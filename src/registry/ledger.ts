@@ -18,6 +18,7 @@ const ledger = new nedb<ledger_interface>({
 let MasterPort: number = -1;
 
 export const InsertLedger = (data: ledger_interface) => {
+  data.node_role = "dfs";
   ledger.insert(data, (err) => {
     if (err) {
       logger("Error occured while inserting to ledger " + err.name, "error");
@@ -77,5 +78,35 @@ export const AssignMasterByForce = async () => {
       logger("Error occured in  AssignMasterByForce" + err.name, "error");
       logger(err.message, "error");
     }
+  }
+};
+
+export const GetAllNodes = (): Promise<ledger_interface[]> => {
+  return new Promise((resolve, reject) => {
+    ledger.find(
+      { node_role: "dfs" },
+      (err: { name: string; message: string }, docs: ledger_interface[]) => {
+        if (err) {
+          logger(
+            "Error occured while inserting to ledger " + err.name,
+            "error"
+          );
+          logger(err.message, "error");
+          reject(err);
+        } else {
+          resolve(docs);
+        }
+      }
+    );
+  });
+};
+
+export const ExportNodeList = async (): Promise<ledger_interface[]> => {
+  try {
+    const docs = await GetAllNodes();
+    return docs;
+  } catch (error) {
+    logger(error, "error");
+    return [];
   }
 };

@@ -8,6 +8,7 @@ import { join } from "path";
 import { logger } from "../util/logger";
 import { SplitFile } from "./master";
 import { CheckUploadDirExist } from "./common/fs";
+import { InsertToLedger, PopulateLedger } from "./common/election";
 
 interface node_interface {
   node_id: number;
@@ -63,6 +64,14 @@ app.post("/first-master", (req, res) => {
   res.sendStatus(200);
 });
 
+/*
+  When a new node is added to the registry ledger, service registry inform
+  other nodes via this endpoint
+*/
+app.post("/node-update", (req, res) => {
+  InsertToLedger(req.body.newnode);
+});
+
 // Endpoints - Master
 app.post("/upload", upload.single("inputfile"), (req, res) => {
   if (NODE_DETAILS.node_role != "master") {
@@ -97,13 +106,18 @@ const mount_node = (port: number) => {
         port: NODE_DETAILS.node_port,
       }),
       headers: { "Content-Type": "application/json" },
-    }).then((res) => {
-      if (res.ok) {
-        logger("Updated status in registry");
-      } else {
-        logger("Failed to update status in registry", "error");
-      }
-    });
+    })
+      .then((res) => {
+        if (res.ok) {
+          logger("Updated status in registry");
+        } else {
+          logger("Failed to update status in registry", "error");
+        }
+        return res.json();
+      })
+      .then((json) => {
+        PopulateLedger(json);
+      });
   });
 };
 

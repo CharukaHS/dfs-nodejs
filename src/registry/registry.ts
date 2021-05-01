@@ -3,6 +3,7 @@ import { logger } from "../util/logger";
 import {
   AssignMasterByForce,
   FindMasterPort,
+  GetAllNodes,
   InsertLedger,
   ledger_interface,
 } from "./ledger";
@@ -56,5 +57,31 @@ export const UpdateNodeMounted = async (port: number, pid: number) => {
         );
       }
     });
+  }
+
+  logger(`Broadcasting about the newest node ${pid}@${port}`);
+  try {
+    const list = await GetAllNodes();
+    list.forEach((l) => {
+      // avoid updating self
+      if (l.node_id === pid) return;
+
+      // sending post requests
+      fetch(`http://localhost:${l.node_port}/node-update`, {
+        method: "POST",
+        body: JSON.stringify({ newnode: { node_id: pid, port } }),
+        headers: { "Content-Type": "application/json" },
+      }).then((res) => {
+        if (res.ok) {
+          logger(`Informed ${l.node_id}@${l.node_port} successfully`);
+        }
+      });
+    });
+  } catch (error) {
+    logger(
+      "Error occured while informing other nodes about new nodes " + error.name,
+      "error"
+    );
+    logger(error, "error");
   }
 };
