@@ -57,6 +57,15 @@ app.post("/first-master", (req, res) => {
 */
 app.post("/node-update", (req, res) => {
   InsertToLedger(req.body.newnode);
+  res.sendStatus(200);
+});
+
+/*
+  Health check
+  response 200 just to say node is alive
+*/
+app.post("/health-check", (req, res) => {
+  res.sendStatus(200);
 });
 
 // Endpoints - Master

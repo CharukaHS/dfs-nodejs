@@ -1,7 +1,7 @@
 import fetch from "node-fetch";
 import AbortController from "abort-controller";
 import { logger } from "../util/logger";
-import { PopulateLedger } from "./common/election";
+import { PopulateLedger, StartHealthCheckTimer } from "./common/election";
 
 interface node_interface {
   node_id: number;
@@ -66,6 +66,9 @@ export const SignalToServiceRegistry = async () => {
 
     // Populate node's ledger
     PopulateLedger(json);
+
+    // Start signaling /health-check to other nodes
+    StartHealthCheckTimer();
   } catch (error) {
     logger("Error occured in SignalToServiceRegistry", "error");
     logger(error, "error");
