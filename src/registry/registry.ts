@@ -16,9 +16,6 @@ export const GetMasterNodePort = FindMasterPort;
 
 // Add new node to the ledger
 export const AddNewNode = async (data: ledger_interface): Promise<number> => {
-  data.node_lastupdate = Date.now();
-  data.node_mounted = false;
-
   /*
   port for nodes is assigned dynamically.
   if node is a learner node, port is 3001

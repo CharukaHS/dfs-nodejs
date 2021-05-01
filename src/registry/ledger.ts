@@ -5,8 +5,6 @@ export interface ledger_interface {
   node_id: number;
   node_role: "learner" | "dfs";
   node_port?: number;
-  node_lastupdate?: number;
-  node_mounted?: boolean;
 }
 
 const ledger = new nedb<ledger_interface>({
