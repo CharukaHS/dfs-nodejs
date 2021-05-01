@@ -77,7 +77,9 @@ export const UpdateNodeMounted = async (port: number, pid: number) => {
       // sending post requests
       const res = await fetch(`http://localhost:${l.node_port}/node-update`, {
         method: "POST",
-        body: JSON.stringify({ newnode: { node_id: pid, port } }),
+        body: JSON.stringify({
+          newnode: { node_id: pid, node_port: port, node_role: "dfs" },
+        }),
         headers: { "Content-Type": "application/json" },
       });
 
