@@ -74,17 +74,26 @@ export const UpdateNodeMounted = async (port: number, pid: number) => {
       // avoid updating self
       if (l.node_id === pid) return;
 
-      // sending post requests
-      const res = await fetch(`http://localhost:${l.node_port}/node-update`, {
-        method: "POST",
-        body: JSON.stringify({
-          newnode: { node_id: pid, node_port: port, node_role: "dfs" },
-        }),
-        headers: { "Content-Type": "application/json" },
-      });
+      try {
+        // sending post requests
+        const res = await fetch(`http://localhost:${l.node_port}/node-update`, {
+          method: "POST",
+          body: JSON.stringify({
+            newnode: { node_id: pid, node_port: port, node_role: "dfs" },
+          }),
+          headers: { "Content-Type": "application/json" },
+        });
 
-      if (res.ok) {
-        logger(`Informed ${l.node_id}@${l.node_port} successfully`);
+        if (res.ok) {
+          logger(`Informed ${l.node_id}@${l.node_port} successfully`);
+        }
+      } catch (error) {
+        logger(
+          "Error occured while informing other nodes about new nodes-inner " +
+            error.name,
+          "error"
+        );
+        logger(error, "error");
       }
     });
   } catch (error) {
