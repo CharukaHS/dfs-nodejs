@@ -11,14 +11,14 @@ import { CheckUploadDirExist } from "./common/fs";
 
 interface node_interface {
   node_id: number;
-  node_role: "dfs";
+  node_role: "master" | "slave";
   node_port?: number;
 }
 
 const SERVICE_REGISTRY = "http://localhost:3000";
 const NODE_DETAILS: node_interface = {
   node_id: process.pid,
-  node_role: "dfs",
+  node_role: "slave",
 };
 
 // express config
@@ -48,8 +48,29 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
+// Endpoints - Common
+/*
+  The first master, at the start of all process will be determined by
+  the service registry
+
+  if service registry noticed there isn't any master among the nodes,
+  service worker will send a post request to below endpoint of the node
+  which has the highest pid
+*/
+app.post("/first-master", (req, res) => {
+  logger("Elected as master without a election", "success");
+  NODE_DETAILS.node_role = "master";
+  res.sendStatus(200);
+});
+
 // Endpoints - Master
 app.post("/upload", upload.single("inputfile"), (req, res) => {
+  if (NODE_DETAILS.node_role != "master") {
+    logger(
+      `localhost:${NODE_DETAILS.node_port} received an upload file but it isn't the master`,
+      "error"
+    );
+  }
   logger(`Received a file ${req.file.originalname}`, "info");
   SplitFile(req.file);
   res.sendStatus(200);
@@ -58,7 +79,6 @@ app.post("/upload", upload.single("inputfile"), (req, res) => {
 // Mount express app on given node
 const mount_node = (port: number) => {
   logger("Registered in service-registry", "success");
-  logger(`Port number ${port}`, "info");
 
   NODE_DETAILS.node_port = port;
 
@@ -68,6 +88,22 @@ const mount_node = (port: number) => {
 
     // Make sure uploads saving directory exist, if not create one
     CheckUploadDirExist(TMP_PATH, NODE_DETAILS.node_id.toString());
+
+    // send a signal to registry to update status
+    fetch(SERVICE_REGISTRY + "/mount-success", {
+      method: "POST",
+      body: JSON.stringify({
+        pid: process.pid,
+        port: NODE_DETAILS.node_port,
+      }),
+      headers: { "Content-Type": "application/json" },
+    }).then((res) => {
+      if (res.ok) {
+        logger("Updated status in registry");
+      } else {
+        logger("Failed to update status in registry", "error");
+      }
+    });
   });
 };
 

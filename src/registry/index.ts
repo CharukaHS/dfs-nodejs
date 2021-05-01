@@ -4,7 +4,7 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 import { logger } from "../util/logger";
 
-import { AddNewNode, GetMasterNodePort } from "./registry";
+import { AddNewNode, GetMasterNodePort, UpdateNodeMounted } from "./registry";
 
 // express config
 const app = express();
@@ -19,6 +19,15 @@ app.use(express.urlencoded({ extended: true }));
 app.post("/register", async (req, res) => {
   const port = await AddNewNode(req.body);
   res.json({ port });
+});
+
+/*
+  Signal from node which emit after mounting on given port
+*/
+app.post("/mount-success", (req, res) => {
+  const { pid, port } = req.body;
+  UpdateNodeMounted(port, pid);
+  res.sendStatus(200);
 });
 
 /*
