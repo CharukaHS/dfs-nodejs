@@ -46,36 +46,47 @@ export const UpdateNodeMounted = async (port: number, pid: number) => {
     await AssignMasterByForce();
     master_exist = true;
 
-    // notifying that node 'you are the master'
-    fetch(`http://localhost:${FindMasterPort()}/first-master`, {
-      method: "POST",
-    }).then((res) => {
+    try {
+      // notifying that node 'you are the master'
+      const res = await fetch(
+        `http://localhost:${FindMasterPort()}/first-master`,
+        {
+          method: "POST",
+        }
+      );
+
       if (res.ok) {
         logger(
           `Port ${FindMasterPort()} is selected as the president by service registry`,
           "info"
         );
       }
-    });
+    } catch (error) {
+      logger(
+        `Error occured while http://localhost:${FindMasterPort()}/first-master`,
+        "error"
+      );
+      logger(error, "error");
+    }
   }
 
   logger(`Broadcasting about the newest node ${pid}@${port}`);
   try {
     const list = await GetAllNodes();
-    list.forEach((l) => {
+    list.forEach(async (l) => {
       // avoid updating self
       if (l.node_id === pid) return;
 
       // sending post requests
-      fetch(`http://localhost:${l.node_port}/node-update`, {
+      const res = await fetch(`http://localhost:${l.node_port}/node-update`, {
         method: "POST",
         body: JSON.stringify({ newnode: { node_id: pid, port } }),
         headers: { "Content-Type": "application/json" },
-      }).then((res) => {
-        if (res.ok) {
-          logger(`Informed ${l.node_id}@${l.node_port} successfully`);
-        }
       });
+
+      if (res.ok) {
+        logger(`Informed ${l.node_id}@${l.node_port} successfully`);
+      }
     });
   } catch (error) {
     logger(
