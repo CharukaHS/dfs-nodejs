@@ -1,26 +1,13 @@
 import express from "express";
 import cors from "cors";
-import fetch from "node-fetch";
-import AbortController from "abort-controller";
 import multer from "multer";
 import { join } from "path";
 
+import { GetPortNumber, NODE_DETAILS, SignalToServiceRegistry } from "./util";
 import { logger } from "../util/logger";
 import { SplitFile } from "./master";
 import { CheckUploadDirExist } from "./common/fs";
-import { InsertToLedger, PopulateLedger } from "./common/election";
-
-interface node_interface {
-  node_id: number;
-  node_role: "master" | "slave";
-  node_port?: number;
-}
-
-const SERVICE_REGISTRY = "http://localhost:3000";
-const NODE_DETAILS: node_interface = {
-  node_id: process.pid,
-  node_role: "slave",
-};
+import { InsertToLedger } from "./common/election";
 
 // express config
 const app = express();
@@ -85,13 +72,10 @@ app.post("/upload", upload.single("inputfile"), (req, res) => {
   res.sendStatus(200);
 });
 
-// Mount express app on given node
-const mount_node = (port: number) => {
-  logger("Registered in service-registry", "success");
+(async () => {
+  // Get a port number from service registry to mount
+  await GetPortNumber();
 
-  NODE_DETAILS.node_port = port;
-
-  logger(`Mounting node in localhost:${NODE_DETAILS.node_port}`);
   app.listen(NODE_DETAILS.node_port, () => {
     logger(`Running on port ${NODE_DETAILS.node_port}`, "success");
 
@@ -99,55 +83,6 @@ const mount_node = (port: number) => {
     CheckUploadDirExist(TMP_PATH, NODE_DETAILS.node_id.toString());
 
     // send a signal to registry to update status
-    fetch(SERVICE_REGISTRY + "/mount-success", {
-      method: "POST",
-      body: JSON.stringify({
-        pid: process.pid,
-        port: NODE_DETAILS.node_port,
-      }),
-      headers: { "Content-Type": "application/json" },
-    })
-      .then((res) => {
-        if (res.ok) {
-          logger("Updated status in registry");
-        } else {
-          logger("Failed to update status in registry", "error");
-        }
-        return res.json();
-      })
-      .then((json) => {
-        PopulateLedger(json);
-      });
+    SignalToServiceRegistry();
   });
-};
-
-(() => {
-  // get port number from service registry
-  logger("Contacting service-registry", "debug");
-
-  // handle timeout
-  const controller = new AbortController();
-  const sr_timeout = setTimeout(() => {
-    controller.abort();
-  }, 150);
-
-  fetch(SERVICE_REGISTRY + "/register", {
-    method: "POST",
-    body: JSON.stringify(NODE_DETAILS),
-    headers: { "Content-Type": "application/json" },
-    signal: controller.signal,
-  })
-    .then((res) => res.json())
-    .then(
-      (json) => {
-        mount_node(json.port);
-      },
-      (err) => {
-        logger("Error occured", "error");
-        logger(err, "error");
-      }
-    )
-    .finally(() => {
-      clearTimeout(sr_timeout);
-    });
 })();
