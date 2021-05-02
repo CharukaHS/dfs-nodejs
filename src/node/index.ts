@@ -4,16 +4,18 @@ import multer from "multer";
 import { join } from "path";
 
 import {
+  GetMasterPort,
   GetPortNumber,
   NODE_DETAILS,
   SetMasterPort,
   SignalToServiceRegistry,
 } from "./util";
 import { logger } from "../util/logger";
-import { SplitFile } from "./master";
+import { SendDBSnapshot, SplitFile } from "./master";
 import { CheckUploadDirExist } from "./common/fs";
 import { InsertToLedger } from "./common/ledger";
 import { BroadcastMasterStatus, ConductElection } from "./common/election";
+import { DataForNewDatabase, UpdateMasterDB } from "./common/nedb";
 
 // express config
 const app = express();
@@ -70,6 +72,10 @@ app.post("/first-master", (req, res) => {
 */
 app.post("/node-update", (req, res) => {
   InsertToLedger(req.body.newnode);
+
+  // if this node is the master, send a snapshot of database
+  // GetMasterPort return 0 if the current node's port is master
+  if (!GetMasterPort()) SendDBSnapshot(req.body.newnode);
   res.sendStatus(200);
 });
 
@@ -95,6 +101,15 @@ app.post("/upload", upload.single("inputfile"), (req, res) => {
 });
 
 // Endpoints - Slave
+/*
+  On fresh startups, keep upto-date with master's nedb
+*/
+app.post("/clone-master-db", (req, res) => {
+  logger("Received the database snapshot from master node");
+  DataForNewDatabase(req.body.snapshot);
+  res.sendStatus(200);
+});
+
 /* 
   When an election is conducting
 */
@@ -109,6 +124,14 @@ app.post("/election", (req, res) => {
 app.post("/set-master", (req, res) => {
   logger(`Setting localhost:${req.body.masterport} as the master`, "info");
   SetMasterPort(req.body.masterport);
+  res.sendStatus(200);
+});
+
+/*
+  On master node sends information about new files chunks and metadata
+*/
+app.post("/update-master-db", (req, res) => {
+  UpdateMasterDB(req.body.data);
   res.sendStatus(200);
 });
 
