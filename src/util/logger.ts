@@ -20,7 +20,8 @@ export const logger = async (
       break;
 
     case "debug":
-      console.log(chalk.black.bgWhite("DEBUG:"), log);
+      if (!process.env.PRODUCTION)
+        console.log(chalk.black.bgWhite("DEBUG:"), log);
       break;
   }
 };
