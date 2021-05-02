@@ -1,7 +1,11 @@
+import { createReadStream } from "fs";
+import { join } from "path";
 import fetch from "node-fetch";
+import FormData from "form-data";
+
 import { logger } from "../util/logger";
 import { CheckFileExist } from "./common/fs";
-import { GetNodesThatAlive } from "./common/ledger";
+import { GetNodesThatAlive, ledger_interface } from "./common/ledger";
 import { AddNewFileToDB, ExportMasterDB, MasterDocument } from "./common/nedb";
 import { RunSplitShell } from "./common/shell";
 
@@ -76,4 +80,52 @@ export const BroadcastNewFileData = async (doc: MasterDocument) => {
       logger(error, "error");
     }
   });
+};
+
+export const HandleFileDistribution = async (
+  doc: MasterDocument,
+  slaves: ledger_interface[]
+) => {
+  logger("Handling file distribution");
+  for (const chunk of doc.chunks) {
+    for (const location of chunk.locations) {
+      const form = new FormData();
+      const stream = createReadStream(
+        join(
+          doc.destination,
+          process.pid.toString(),
+          doc.filename,
+          chunk.chunk_id
+        )
+      );
+      form.append("chunk", stream);
+
+      const destination: number = slaves[location].node_port;
+
+      try {
+        const res = await fetch(
+          `http://localhost:${destination}/chunk-upload`,
+          {
+            method: "POST",
+            body: form,
+          }
+        );
+
+        if (!res.ok) {
+          logger(
+            `Error in sending chunk ${chunk.chunk_id} to localhost:${destination}`,
+            "error"
+          );
+        }
+
+        logger(`Sent chunk ${chunk.chunk_id} to localhost:${destination}`);
+      } catch (error) {
+        logger(
+          `Error while handling chunk ${chunk.chunk_id} to localhost:${destination}`,
+          "error"
+        );
+        logger(error, "error");
+      }
+    }
+  }
 };

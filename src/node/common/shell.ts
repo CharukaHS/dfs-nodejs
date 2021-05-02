@@ -15,7 +15,7 @@ export const RunSplitShell = (file: Express.Multer.File, size: number) => {
     shell.mkdir("-p", destination);
 
     shell.exec(
-      `bash ${bash_path} ${file.path} ${destination}/${file.filename} ${size}`,
+      `bash ${bash_path} ${file.path} ${destination}/${file.filename}- ${size}`,
       { async: true },
       (code, stdout, stderr) => {
         // delete the original file
@@ -35,4 +35,9 @@ export const RunSplitShell = (file: Express.Multer.File, size: number) => {
       }
     );
   });
+};
+
+export const CreateDirectory = (path: string) => {
+  logger(`Creating directory ${path}`);
+  shell.mkdir("-p", path);
 };

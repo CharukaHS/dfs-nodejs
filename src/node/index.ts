@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
-import multer from "multer";
-import { join } from "path";
+import { MasterUpload, SlaveUpload, TMP_PATH } from "./multer";
 
 import {
   GetMasterPort,
@@ -22,27 +21,6 @@ const app = express();
 app.use(cors({ allowedHeaders: "*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// multer config
-// files are temporary saved in /tmp
-// chunked saved in /tmp/$pid
-const TMP_PATH = join(__dirname + "/tmp");
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, TMP_PATH);
-  },
-  filename: (req, file, cb) => {
-    cb(
-      null,
-      file.fieldname +
-        "-" +
-        Date.now() +
-        "-" +
-        Math.round(Math.random() * 100000)
-    );
-  },
-});
-const upload = multer({ storage });
 
 // Endpoints - Common
 /*
@@ -88,7 +66,7 @@ app.post("/health-check", (req, res) => {
 });
 
 // Endpoints - Master
-app.post("/upload", upload.single("inputfile"), (req, res) => {
+app.post("/upload", MasterUpload.single("inputfile"), (req, res) => {
   if (NODE_DETAILS.node_role != "master") {
     logger(
       `localhost:${NODE_DETAILS.node_port} received an upload file but it isn't the master`,
@@ -107,6 +85,14 @@ app.post("/upload", upload.single("inputfile"), (req, res) => {
 app.post("/clone-master-db", (req, res) => {
   logger("Received the database snapshot from master node");
   DataForNewDatabase(req.body.snapshot);
+  res.sendStatus(200);
+});
+
+/*
+  Handle chunks
+*/
+app.post("/chunk-upload", SlaveUpload.single("chunk"), (req, res) => {
+  logger(`Chunk received ${req.file.originalname}`);
   res.sendStatus(200);
 });
 

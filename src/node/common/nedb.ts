@@ -1,14 +1,15 @@
 import nedb from "nedb";
-import { readdir } from "fs";
 import { join } from "path";
 import { logger } from "../../util/logger";
-import { BroadcastNewFileData } from "../master";
+import { BroadcastNewFileData, HandleFileDistribution } from "../master";
+import { ReadDirectory } from "./fs";
+import { GetNodesThatAlive } from "./ledger";
 
 // interfaces
 export interface MasterDocument extends Express.Multer.File {
   chunks: {
     chunk_id: string;
-    locations?: string[];
+    locations: number[]; // contain the port numbers
   }[];
 }
 
@@ -44,26 +45,36 @@ export const AddNewFileToDB = async (file: Express.Multer.File) => {
     file.filename
   );
 
-  readdir(destination, (err, files) => {
-    if (err) {
-      logger(
-        `${file.filename}: Error occured while reading file directory`,
-        "error"
-      );
-      logger(err.toString(), "error");
-      return;
+  // Read chunks files
+  const files = await ReadDirectory(destination);
+
+  // For redundacy purpose, n copies of same chunks are saved in two different nodes
+  // Chunk saving nodes is calculated based on the chunk index
+  // slave1 => index % no of nodes
+  // slave2 => (index+1) % no of nodes
+  // ...etc
+
+  const slaves = GetNodesThatAlive();
+  const REDUNDANT_COPIES: number = 2;
+
+  files.forEach((f, i) => {
+    const selected_slaves: number[] = [];
+    for (let index = 0; index < REDUNDANT_COPIES; index++) {
+      const value = (i + index) % slaves.length;
+      selected_slaves.push(value);
     }
 
-    files.forEach((f) => {
-      doc.chunks.push({ chunk_id: f });
-    });
+    doc.chunks.push({ chunk_id: f, locations: selected_slaves });
+  });
 
-    MasterDatastore.insert(doc, (err) => {
-      if (err) logger(`${file.filename}: Inserted chunk data to database`);
+  MasterDatastore.insert(doc, (err) => {
+    if (err) logger(`${file.filename}: Inserted chunk data to database`);
 
-      // Tell every node about the new file
-      BroadcastNewFileData(doc);
-    });
+    // Tell every node about the new file
+    BroadcastNewFileData(doc);
+
+    // Distribute chunks among slave nodes
+    HandleFileDistribution(doc, slaves);
   });
 };
 

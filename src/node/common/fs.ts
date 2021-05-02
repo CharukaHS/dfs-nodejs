@@ -1,4 +1,5 @@
-import { access, constants, mkdir, unlink } from "fs";
+import { access, constants, mkdir } from "fs";
+import { readdir } from "fs/promises";
 import { logger } from "../../util/logger";
 
 export const CheckUploadDirExist = (path: string, pid: string) => {
@@ -30,4 +31,9 @@ export const CheckFileExist = async (path: string) => {
       }
     });
   });
+};
+
+export const ReadDirectory = async (path: string) => {
+  const files = await readdir(path);
+  return files;
 };

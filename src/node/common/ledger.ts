@@ -4,7 +4,7 @@ import { logger } from "../../util/logger";
 import { GetMasterPort, NODE_DETAILS } from "../util";
 import { ConductElection } from "./election";
 import { inputdata_interface } from "../master";
-interface ledger_interface extends inputdata_interface {
+export interface ledger_interface extends inputdata_interface {
   alive: boolean;
   last_update: number;
 }
