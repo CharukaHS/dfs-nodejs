@@ -31,14 +31,3 @@ export const CheckFileExist = async (path: string) => {
     });
   });
 };
-
-export const RemoveOriginal = async (path: string) => {
-  return new Promise((resolve, reject) => {
-    unlink(path, (err) => {
-      if (err) {
-        logger(`Cannot delete file ${path}`, "error");
-        reject(err);
-      } else resolve(true);
-    });
-  });
-};

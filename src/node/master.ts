@@ -1,5 +1,5 @@
 import { logger } from "../util/logger";
-import { CheckFileExist, RemoveOriginal } from "./common/fs";
+import { CheckFileExist } from "./common/fs";
 import { AddNewFileToDB } from "./common/nedb";
 import { RunSplitShell } from "./common/shell";
 

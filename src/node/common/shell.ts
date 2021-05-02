@@ -18,7 +18,9 @@ export const RunSplitShell = (file: Express.Multer.File, size: number) => {
       `bash ${bash_path} ${file.path} ${destination}/${file.filename} ${size}`,
       { async: true },
       (code, stdout, stderr) => {
+        // delete the original file
         shell.rm(file.path);
+
         if (code === 0) {
           logger(`${file.filename}: split job finished`, "success");
           resolve(true);
