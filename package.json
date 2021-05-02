@@ -6,7 +6,8 @@
   "scripts": {
     "start:client": "nodemon src/client/index.ts",
     "start:dfs": "nodemon src/node/index.ts",
-    "start:registry": "nodemon src/registry/index.ts"
+    "start:registry": "nodemon src/registry/index.ts",
+    "clean-node-temp": "rm -r src/node/tmp"
   },
   "dependencies": {
     "abort-controller": "^3.0.0",
