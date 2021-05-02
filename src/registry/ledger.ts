@@ -15,6 +15,9 @@ const ledger = new nedb<ledger_interface>({
 // why search in a database when you can store in plain sight?
 let MasterPort: number = -1;
 
+export const FindMasterPort = (): number => MasterPort;
+export const SetMasterPort = (port: number) => (MasterPort = port);
+
 export const InsertLedger = (data: ledger_interface) => {
   data.node_role = "dfs";
   ledger.insert(data, (err) => {
@@ -29,8 +32,6 @@ export const InsertLedger = (data: ledger_interface) => {
     }
   });
 };
-
-export const FindMasterPort = (): number => MasterPort;
 
 const FindBiggestPIDNode = (): Promise<number> => {
   return new Promise((resolve, reject) => {

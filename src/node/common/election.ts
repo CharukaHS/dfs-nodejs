@@ -1,85 +1,115 @@
 import fetch from "node-fetch";
 import AbortController from "abort-controller";
+import { NODE_DETAILS, SERVICE_REGISTRY, SetMasterPort } from "../util";
 import { logger } from "../../util/logger";
-import { NODE_DETAILS } from "../util";
+import { GetNodesThatAlive } from "./ledger";
 
-interface inputdata_interface {
-  node_id: number;
-  node_role: "learner" | "dfs";
-  node_port: number;
-}
-interface ledger_interface extends inputdata_interface {
-  alive: boolean;
-  last_update: number;
-}
+let pending_election: boolean = false;
+export const ConductElection = async () => {
+  // Skip if an election is already conducting
+  if (pending_election) return;
 
-const ledger: ledger_interface[] = [];
+  // Set an election is already conducting
+  pending_election = true;
 
-// Health check, check other nodes status
-const INTERVAL = 30 * 1000; // check health of other nodes for every x seconds
-const TIMEOUT = 150; // if node didn't respond in x milli-seconds, consider its dead
+  logger("Starting an election", "info");
+  // filter out nodes which has higher PID than this node
+  const nodes = GetNodesThatAlive();
+  const candidates = nodes.filter(
+    (node) => node.node_id > NODE_DETAILS.node_id && node.alive
+  );
 
-const CheckOthersHealth = async () => {
-  logger("Running health check function");
-  ledger.forEach(async (node) => {
-    // setup request timeout
+  let gotaresponse: boolean = false;
+
+  // send a signal to each candidate
+  for (const cand of candidates) {
     const controller = new AbortController();
-    const healthcheck_timeout = setTimeout(() => {
+    const election_timeout = setTimeout(() => {
       controller.abort();
-    }, TIMEOUT);
-
+    }, 200);
     try {
-      // send request
-      const res = await fetch(
-        `http://localhost:${node.node_port}/health-check`,
-        {
-          method: "POST",
-          signal: controller.signal,
-        }
-      );
+      const res = await fetch(`http://localhost:${cand.node_port}/election`, {
+        method: "POST",
+        signal: controller.signal,
+      });
 
       if (res.ok) {
-        node.alive = true;
-        node.last_update = Date.now();
-        logger(`${node.node_port} is alive`);
+        gotaresponse = true;
       }
     } catch (error) {
-      if (error) {
-        logger(
-          `Node ${node.node_port} didn't respond for health-check`,
-          "error"
-        );
-        node.alive = false;
-      }
+      logger(`${cand.node_id}@${cand.node_port} didn't respond to election`);
     } finally {
-      clearTimeout(healthcheck_timeout);
+      clearTimeout(election_timeout);
     }
-  });
+  }
+
+  // gotareponse means better candidates are alive
+  if (gotaresponse) {
+    logger(
+      "Higher PID node(s) did repond, waiting for other nodes election result",
+      "info"
+    );
+    pending_election = false;
+    return;
+  }
+
+  // no one responded or no one to request, this node will be the master
+  if (!candidates.length) {
+    logger("No candidates", "info");
+  } else {
+    logger("Higher candidates didn't respond", "info");
+  }
+
+  logger("Consider myself as the master", "info");
+
+  // I AM THE MASTER
+  SetMasterPort(0); // 0 to indicate current node is master
+
+  // Tell others whos the boss now
+  await BroadcastMasterStatus();
+
+  // Inform registry
+  try {
+    const res = await fetch(SERVICE_REGISTRY + "/new-master", {
+      method: "POST",
+      body: JSON.stringify({
+        masterport: NODE_DETAILS.node_port,
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (res.ok) logger(`Updated service registry about new master`);
+  } catch (error) {
+    logger(`Error occured while informing to service registry`, "error");
+    logger(error, "error");
+  } finally {
+    pending_election = false;
+  }
 };
 
-// Runs on the first time, add information about all previous nodes
-export const PopulateLedger = (data: inputdata_interface[]) => {
-  logger("Populating node ledger with " + (data.length - 1) + " nodes"); // because data has current node's detaisl too
-  data.forEach((e) => {
-    // registry send information about every node, include about this node too
-    // filterning out details about this node
-    if (e.node_port === NODE_DETAILS.node_port) return;
+export const BroadcastMasterStatus = async () => {
+  const nodes = GetNodesThatAlive();
+  for (const node of nodes) {
+    try {
+      const res = await fetch(`http://localhost:${node.node_port}/set-master`, {
+        method: "POST",
+        body: JSON.stringify({
+          masterport: NODE_DETAILS.node_port,
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
 
-    let doc: ledger_interface = { ...e, alive: true, last_update: Date.now() };
-    ledger.push(doc);
-  });
-};
-
-// Runs everytime a new node is appear
-export const InsertToLedger = (data: inputdata_interface) => {
-  logger(
-    "Received a update to node list " + data.node_id + "@" + data.node_port
-  );
-  let doc: ledger_interface = { ...data, alive: true, last_update: Date.now() };
-  ledger.push(doc);
-};
-
-export const StartHealthCheckTimer = async () => {
-  logger("Starting health checking timer");
-  setInterval(CheckOthersHealth, INTERVAL);
+      if (res.ok)
+        logger(`Updated ${node.node_id}@${node.node_port} about new master`);
+    } catch (error) {
+      // Caution, Fetch errors occur when request didn't reached the endpoint
+      // here I just assume its because node is dead and that is why we conducted the election
+      if (error.name === "FetchError") return;
+      logger(
+        `Error occured while informing to node localhost:${node.node_port}`,
+        "error"
+      );
+      logger(error, "error");
+    }
+  }
 };

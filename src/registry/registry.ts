@@ -38,7 +38,9 @@ export const AddNewNode = async (data: ledger_interface): Promise<number> => {
 
 // Update node_mounted status
 export const UpdateNodeMounted = async (port: number, pid: number) => {
-  logger(`Mounting node ${pid}@localhost:${port} is success`, "success");
+  logger(`Mounting node ${pid}@localhost:${port} is success`);
+
+  // if a master does not exist, master is elected by the serive registry
   if (!master_exist) {
     await AssignMasterByForce();
     master_exist = true;
@@ -61,6 +63,21 @@ export const UpdateNodeMounted = async (port: number, pid: number) => {
     } catch (error) {
       logger(
         `Error occured while http://localhost:${FindMasterPort()}/first-master`,
+        "error"
+      );
+      logger(error, "error");
+    }
+  } else {
+    try {
+      // Tell the new node about who is the master
+      const res = await fetch(`http://localhost:${port}/set-master`, {
+        method: "POST",
+        body: JSON.stringify({ masterport: FindMasterPort() }),
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      logger(
+        `Error occured while http://localhost:${port}/set-master`,
         "error"
       );
       logger(error, "error");

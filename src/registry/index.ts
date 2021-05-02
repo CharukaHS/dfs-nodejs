@@ -3,9 +3,8 @@ import cors from "cors";
 import { createProxyMiddleware } from "http-proxy-middleware";
 
 import { logger } from "../util/logger";
-
 import { AddNewNode, GetMasterNodePort, UpdateNodeMounted } from "./registry";
-import { ExportNodeList } from "./ledger";
+import { ExportNodeList, SetMasterPort } from "./ledger";
 
 // express config
 const app = express();
@@ -38,6 +37,18 @@ app.post("/mount-success", async (req, res) => {
 */
 const master_upload_url = () => `http://localhost:${GetMasterNodePort()}`;
 app.use("/upload", createProxyMiddleware({ router: master_upload_url }));
+
+/*
+  Election results
+*/
+app.use("/new-master", (req, res) => {
+  // multiple elections, same result. Avoiding re-updating variable
+  if (GetMasterNodePort() !== req.body.masterport) {
+    logger(`Received a new master node port ${req.body.masterport}`, "info");
+    SetMasterPort(req.body.masterport);
+  }
+  res.sendStatus(200);
+});
 
 app.listen(port, () => {
   logger(`running on port ${port}`, "success");

@@ -3,11 +3,17 @@ import cors from "cors";
 import multer from "multer";
 import { join } from "path";
 
-import { GetPortNumber, NODE_DETAILS, SignalToServiceRegistry } from "./util";
+import {
+  GetPortNumber,
+  NODE_DETAILS,
+  SetMasterPort,
+  SignalToServiceRegistry,
+} from "./util";
 import { logger } from "../util/logger";
 import { SplitFile } from "./master";
 import { CheckUploadDirExist } from "./common/fs";
-import { InsertToLedger } from "./common/election";
+import { InsertToLedger } from "./common/ledger";
+import { BroadcastMasterStatus, ConductElection } from "./common/election";
 
 // express config
 const app = express();
@@ -47,7 +53,14 @@ const upload = multer({ storage });
 */
 app.post("/first-master", (req, res) => {
   logger("Elected as master without a election", "success");
+
+  // set role and port
   NODE_DETAILS.node_role = "master";
+  SetMasterPort(0);
+
+  // Broadcast the status
+  BroadcastMasterStatus();
+
   res.sendStatus(200);
 });
 
@@ -81,11 +94,31 @@ app.post("/upload", upload.single("inputfile"), (req, res) => {
   res.sendStatus(200);
 });
 
+// Endpoints - Slave
+/* 
+  When an election is conducting
+*/
+app.post("/election", (req, res) => {
+  ConductElection();
+  res.sendStatus(200);
+});
+
+/*
+  When a new master elected, it informed to this
+*/
+app.post("/set-master", (req, res) => {
+  logger(`Setting localhost:${req.body.masterport} as the master`, "info");
+  SetMasterPort(req.body.masterport);
+  res.sendStatus(200);
+});
+
+// On Mount
 (async () => {
   // Get a port number from service registry to mount
   await GetPortNumber();
 
   app.listen(NODE_DETAILS.node_port, () => {
+    logger(`PID: ${NODE_DETAILS.node_id}`, "info");
     logger(`Running on port ${NODE_DETAILS.node_port}`, "success");
 
     // Make sure uploads saving directory exist, if not create one

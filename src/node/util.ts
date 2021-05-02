@@ -1,19 +1,27 @@
 import fetch from "node-fetch";
 import AbortController from "abort-controller";
 import { logger } from "../util/logger";
-import { PopulateLedger, StartHealthCheckTimer } from "./common/election";
+import { PopulateLedger, StartHealthCheckTimer } from "./common/ledger";
 
 interface node_interface {
   node_id: number;
   node_role: "master" | "slave";
-  node_port?: number;
+  node_port: number;
 }
 
-const SERVICE_REGISTRY = "http://localhost:3000";
+export const SERVICE_REGISTRY = "http://localhost:3000";
 export const NODE_DETAILS: node_interface = {
   node_id: process.pid,
   node_role: "slave",
+  node_port: 0,
 };
+
+// Master node's details
+// -1 => not determined yet
+// 0 => this node is the master
+let MasterPort: number = -1;
+export const GetMasterPort = (): number => MasterPort;
+export const SetMasterPort = (port: number) => (MasterPort = port);
 
 // Request a port number from service registry
 export const GetPortNumber = async () => {
