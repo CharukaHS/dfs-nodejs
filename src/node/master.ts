@@ -6,8 +6,14 @@ import FormData from "form-data";
 import { logger } from "../util/logger";
 import { CheckFileExist } from "./common/fs";
 import { GetNodesThatAlive, ledger_interface } from "./common/ledger";
-import { AddNewFileToDB, ExportMasterDB, MasterDocument } from "./common/nedb";
+import {
+  AddNewFileToDB,
+  DBFindFileRecord,
+  ExportMasterDB,
+  MasterDocument,
+} from "./common/nedb";
 import { RunSplitShell } from "./common/shell";
+import { GenerateHash } from "./common/crypto";
 
 export interface inputdata_interface {
   node_id: number;
@@ -82,10 +88,7 @@ export const BroadcastNewFileData = async (doc: MasterDocument) => {
   });
 };
 
-export const HandleFileDistribution = async (
-  doc: MasterDocument,
-  slaves: ledger_interface[]
-) => {
+export const HandleFileDistribution = async (doc: MasterDocument) => {
   logger("Handling file distribution");
   for (const chunk of doc.chunks) {
     for (const location of chunk.locations) {
@@ -100,7 +103,7 @@ export const HandleFileDistribution = async (
       );
       form.append("chunk", stream);
 
-      const destination: number = slaves[location].node_port;
+      const destination: number = location;
 
       try {
         const res = await fetch(
@@ -128,4 +131,121 @@ export const HandleFileDistribution = async (
       }
     }
   }
+};
+
+// Send checksum data to learner node
+export const CreateChecksum = async (doc: MasterDocument, path: string) => {
+  const results: {
+    filename: string;
+    checksum: {
+      [chunk_id: string]: {
+        nodes: number[];
+        hash: string;
+      };
+    };
+  } = {
+    filename: doc.filename,
+    checksum: {},
+  };
+
+  // checksum for every chunk
+  for (const chunk of doc.chunks) {
+    try {
+      // Generating hash
+      const hash = await GenerateHash(join(path, chunk.chunk_id));
+
+      results.checksum[chunk.chunk_id] = {
+        nodes: chunk.locations,
+        hash,
+      };
+    } catch (error) {
+      logger("Error occured while generating checksum for chunks", "error");
+      logger(error, "error");
+    }
+  }
+
+  logger("Sending checksum results to learner node");
+
+  try {
+    const res = await fetch("http://localhost:3001/new-record", {
+      method: "POST",
+      body: JSON.stringify({ results }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!res.ok)
+      logger(
+        "Something went wrong while passing checksum results to learner node",
+        "error"
+      );
+  } catch (error) {
+    logger("Error occured while sending checksum to learner", "error");
+    logger(error, "error");
+  }
+};
+
+interface ResultInterface {
+  [chunk_id: string]: number;
+}
+export const HandleFileDownloadProcess = async (
+  originalname: string
+): Promise<{ result: ResultInterface; err: string }> => {
+  // container chunk_id and its slave port
+  const result: ResultInterface = {};
+  try {
+    const doc = await DBFindFileRecord(originalname);
+
+    for (const chunk of doc.chunks) {
+      result[chunk.chunk_id] = -1; // will be replaced by a slave node port
+
+      for (const slave of chunk.locations) {
+        try {
+          const res = await fetch(`http://localhost:${slave}/verify-checksum`, {
+            method: "POST",
+            body: JSON.stringify({ chunk_id: chunk.chunk_id }),
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (!res.ok) {
+            logger(
+              `http://localhost:${slave}/verify-checksum reponse is not-okay`,
+              "error"
+            );
+            break;
+          }
+
+          const json: { ok: boolean } = await res.json();
+          if (json.ok) {
+            logger(`${chunk.chunk_id} at ${slave} is not corrupted`);
+            result[chunk.chunk_id] = slave;
+            break;
+          }
+          logger(`${chunk.chunk_id} at ${slave} is corrupted`, "info");
+        } catch (error) {
+          // When fetch fails because node doesnt exist anymore
+          // loop again, find a copy in another node
+          if (error.code === "ECONNREFUSED") {
+            logger(`Node ${slave} didn't respond for /verify-checksum`, "info");
+            continue;
+          }
+
+          logger(`Error while reaching ${slave}/verify-checksum`, "error");
+          logger(error, "error");
+        }
+      }
+
+      // if its still -1, no node has that chunk
+      if (result[chunk.chunk_id] === -1) {
+        return {
+          result: {},
+          err: `Couldn't find a node with chunk ${chunk.chunk_id}`,
+        };
+      }
+    }
+  } catch (error) {
+    logger("Error in HandleFileDownloadProcess", "error");
+    logger(error, "error");
+    return { result: {}, err: error };
+  }
+  return { result, err: "" };
 };

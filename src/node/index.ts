@@ -10,11 +10,12 @@ import {
   SignalToServiceRegistry,
 } from "./util";
 import { logger } from "../util/logger";
-import { SendDBSnapshot, SplitFile } from "./master";
+import { HandleFileDownloadProcess, SendDBSnapshot, SplitFile } from "./master";
 import { CheckUploadDirExist } from "./common/fs";
 import { InsertToLedger } from "./common/ledger";
 import { BroadcastMasterStatus, ConductElection } from "./common/election";
 import { DataForNewDatabase, UpdateMasterDB } from "./common/nedb";
+import { ValidateChunksChecksum } from "./slave";
 
 // express config
 const app = express();
@@ -22,7 +23,7 @@ app.use(cors({ allowedHeaders: "*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Endpoints - Common
+//#region Endpoints - Common
 /*
   The first master, at the start of all process will be determined by
   the service registry
@@ -64,8 +65,12 @@ app.post("/node-update", (req, res) => {
 app.post("/health-check", (req, res) => {
   res.sendStatus(200);
 });
+//#endregion
 
-// Endpoints - Master
+//#region Endpoints - Master
+/* 
+  Handle uploads redirected by service registry
+*/
 app.post("/upload", MasterUpload.single("inputfile"), (req, res) => {
   if (NODE_DETAILS.node_role != "master") {
     logger(
@@ -78,7 +83,27 @@ app.post("/upload", MasterUpload.single("inputfile"), (req, res) => {
   res.sendStatus(200);
 });
 
-// Endpoints - Slave
+/*
+  Handle downloads redirected by service registry
+*/
+app.post("/download", async (req, res) => {
+  try {
+    logger(`Receiving download request for ${req.body.filename}`, "info");
+    const { result, err } = await HandleFileDownloadProcess(req.body.filename);
+    logger(
+      `Responded to client with chunks and slave node details about ${req.body.filename}`,
+      "info"
+    );
+    res.status(200).json({ result, err });
+  } catch (error) {
+    logger("Error at /download", "error");
+    logger(error, "error");
+    res.sendStatus(500);
+  }
+});
+//#endregion
+
+//#region  Endpoints - Slave
 /*
   On fresh startups, keep upto-date with master's nedb
 */
@@ -120,6 +145,22 @@ app.post("/update-master-db", (req, res) => {
   UpdateMasterDB(req.body.data);
   res.sendStatus(200);
 });
+
+/* 
+  master verifing chunks not corrupted
+*/
+app.post("/verify-checksum", async (req, res) => {
+  try {
+    const validity = await ValidateChunksChecksum(req.body.chunk_id);
+    res.status(200).json({ ok: validity });
+  } catch (error) {
+    logger("Error occured in /verify-checksum", "error");
+    logger(error, "error");
+    res.sendStatus(500);
+  }
+});
+
+//#endregion
 
 // On Mount
 (async () => {

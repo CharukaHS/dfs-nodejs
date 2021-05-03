@@ -1,7 +1,11 @@
 import nedb from "nedb";
 import { join } from "path";
 import { logger } from "../../util/logger";
-import { BroadcastNewFileData, HandleFileDistribution } from "../master";
+import {
+  BroadcastNewFileData,
+  CreateChecksum,
+  HandleFileDistribution,
+} from "../master";
 import { ReadDirectory } from "./fs";
 import { GetNodesThatAlive } from "./ledger";
 
@@ -61,7 +65,7 @@ export const AddNewFileToDB = async (file: Express.Multer.File) => {
     const selected_slaves: number[] = [];
     for (let index = 0; index < REDUNDANT_COPIES; index++) {
       const value = (i + index) % slaves.length;
-      selected_slaves.push(value);
+      selected_slaves.push(slaves[value].node_port);
     }
 
     doc.chunks.push({ chunk_id: f, locations: selected_slaves });
@@ -74,7 +78,22 @@ export const AddNewFileToDB = async (file: Express.Multer.File) => {
     BroadcastNewFileData(doc);
 
     // Distribute chunks among slave nodes
-    HandleFileDistribution(doc, slaves);
+    HandleFileDistribution(doc);
+
+    // Generate checksum, send to learner node
+    CreateChecksum(doc, destination);
+  });
+};
+
+// Find one document
+export const DBFindFileRecord = (
+  originalname: string
+): Promise<MasterDocument> => {
+  return new Promise((resolve, reject) => {
+    MasterDatastore.findOne({ originalname }, (err, doc) => {
+      if (err) reject(err);
+      resolve(doc);
+    });
   });
 };
 
