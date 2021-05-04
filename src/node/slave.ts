@@ -38,3 +38,9 @@ export const ValidateChunksChecksum = async (chunk_id: string) => {
     logger(error, "error");
   }
 };
+
+export const GenerateChunkPathToDownload = (chunk_id: string) => {
+  const folder = chunk_id.split("-").splice(0, 3).join("-");
+  const path = join(__dirname, "tmp", process.pid.toString(), folder, chunk_id);
+  return path;
+};

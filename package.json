@@ -8,9 +8,10 @@
     "start:dfs": "nodemon src/node/index.ts",
     "start:learner": "nodemon src/learner/index.ts",
     "start:registry": "yarn run clean && nodemon src/registry/index.ts",
-    "clean": "yarn run clean:node-temp && yarn run clean:learner-db",
-    "clean:node-temp": "rm -r src/node/tmp",
-    "clean:learner-db": "rm -r src/learner/checksum"
+    "clean": "yarn run clean:node-temp && yarn run clean:learner-db && yarn run clean:client-downloads",
+    "clean:node-temp": "rm -r src/node/tmp || true",
+    "clean:learner-db": "rm -r src/learner/checksum || true",
+    "clean:client-downloads": "rm -r /downloads || true"
   },
   "dependencies": {
     "abort-controller": "^3.0.0",
@@ -22,7 +23,8 @@
     "multer": "^1.4.2",
     "nedb": "^1.8.0",
     "node-fetch": "^2.6.1",
-    "shelljs": "^0.8.4"
+    "shelljs": "^0.8.4",
+    "ws": "^7.4.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.10",
@@ -32,6 +34,7 @@
     "@types/node": "^15.0.1",
     "@types/node-fetch": "^2.5.10",
     "@types/shelljs": "^0.8.8",
+    "@types/ws": "^7.4.2",
     "nodemon": "^2.0.7",
     "ts-node": "^9.1.1",
     "typescript": "^4.2.4"

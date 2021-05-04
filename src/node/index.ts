@@ -15,7 +15,7 @@ import { CheckUploadDirExist } from "./common/fs";
 import { InsertToLedger } from "./common/ledger";
 import { BroadcastMasterStatus, ConductElection } from "./common/election";
 import { DataForNewDatabase, UpdateMasterDB } from "./common/nedb";
-import { ValidateChunksChecksum } from "./slave";
+import { GenerateChunkPathToDownload, ValidateChunksChecksum } from "./slave";
 
 // express config
 const app = express();
@@ -157,6 +157,18 @@ app.post("/verify-checksum", async (req, res) => {
     logger("Error occured in /verify-checksum", "error");
     logger(error, "error");
     res.sendStatus(500);
+  }
+});
+
+app.post("/download-chunk", async (req, res) => {
+  try {
+    const chunk_id = req.body.chunk_id;
+    const path = GenerateChunkPathToDownload(chunk_id);
+    res.sendFile(path);
+  } catch (error) {
+    logger(`Error in /download-chunk for ${req.body.chunk_id}`, "error");
+    logger(error, "error");
+    res.status(404).send("Sorry! you cant see that.");
   }
 });
 
